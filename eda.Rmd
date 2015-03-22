@@ -1,0 +1,111 @@
+---
+title: "EDA"
+author: "Jeff Hohenstein"
+date: "03/21/2015"
+output: html_document
+---
+
+### Libraries
+
+```{r}
+library(caret)
+library(rpart)
+library(rattle)
+library(ggplot2)
+```
+
+
+### Get the data
+
+Reference : http://groupware.les.inf.puc-rio.br/har
+
+```{r}
+training <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",na.strings=c("NA","#DIV/0!"),stringsAsFactors=FALSE)
+testing <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",na.strings=c("NA","#DIV/0!"),stringsAsFactors=FALSE)
+```
+
+### Clean data issues
+
+```{r}
+cleanPredictors <- function(data){
+  
+  clean <- data
+  
+  hasClass <- sum(names(data)=="classe")
+  
+  if(hasClass){clean[,-which(names(data) %in% c("classe"))]}
+  
+  # remove columns not used for prediction
+  clean <- clean[,-which(names(data) %in% c("X","user_name","cvtd_timestamp","raw_timestamp_part_1","raw_timestamp_part_2","num_window","new_window"))]
+  
+  # Remove columns with near zero variance
+  #clean <- clean[,-nearZeroVar(clean)]
+  
+  # Remove columns with more than 20% NA
+  good_columns <- apply(is.na(clean),2,sum)<10
+  clean <- clean[,good_columns]
+  
+  # Convert remaining columns to numeric
+  clean <- sapply(clean,as.numeric)
+  
+  clean <- data.frame(clean)
+  
+  # Add classe back to the frame
+  if(hasClass){clean$classe <- factor(data$classe)}
+  
+  clean
+  
+}
+
+cleanTraining <- cleanPredictors(training)
+cleanTesting <- cleanPredictors(testing)
+```
+
+
+### What is the distribution of outcomes
+
+```{r}
+barplot(table(training$classe))
+```
+
+### Dimensionality reduction with PCA
+
+```{r}
+#pca <- preProcess(cleanTraining, method="pca")
+```
+
+### Try LM without Preprocessing
+
+```{r}
+set.seed(92038234)
+trainSet <- createDataPartition(cleanTraining[,1],p = .6,times=1,list=FALSE)
+trainPart <- cleanTraining[trainSet,]
+testPart <- cleanTraining[-trainSet,]
+
+lmFit <- lm(dummclasse ~.,data=trainPart,method="lm")
+```
+
+### Try RF with multiple folds
+
+```{r}
+set.seed(324565)
+trainSet <- createDataPartition(cleanTraining$classe,p = .6,times=1,list=FALSE)
+trainPart <- cleanTraining[trainSet,]
+testPart <- cleanTraining[-trainSet,]
+
+rfControl <- trainControl(
+    method="cv",
+    number=5,
+    allowParallel=TRUE
+  )
+
+rfFit <- train(
+  classe ~ .,
+  data=trainPart,
+  method="rf",
+  importance=TRUE,
+  proximity=TRUE,
+  do.trace=TRUE,
+  trControl = rfControl)
+```
+
